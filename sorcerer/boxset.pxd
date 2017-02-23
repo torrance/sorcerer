@@ -1,4 +1,5 @@
 cdef class BoxSet:
+    cdef public int id
     cdef public object boxes
     cdef public int bounds[4]
 

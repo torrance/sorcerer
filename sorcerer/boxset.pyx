@@ -4,8 +4,15 @@ import cython
 import numpy as np
 
 
+cdef int uid = 0
+
+
 cdef class BoxSet:
     def __cinit__(self, object box):
+        global uid
+        uid += 1
+
+        self.id = uid
         self.boxes = [box]
         self.bounds[0] = box[0]
         self.bounds[1] = box[1]
@@ -93,14 +100,17 @@ cdef class BoxSet:
         return vertices
 
     def annotation(self, wcs_helper):
-        line = "CLINES"
+        center = wcs_helper.pix2world(self.center())
+        label = "TEXT {} {} {}".format(center[0], center[1], self.id)
+
+        polygon = "CLINES"
         for vertex in self.vertices():
             x1, y1 = wcs_helper.pix2world(vertex)
             # Limit the accuracy of the floats to avoid bugs in KVIS Karma
             # caused by excessive line length in large, complex shapes.
-            line += " {:.8f} {:.8f}".format(x1, y1)
+            polygon += " {:.8f} {:.8f}".format(x1, y1)
 
-        return line
+        return [label, polygon]
 
 
 def perimeter(pos, grid):

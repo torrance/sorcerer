@@ -159,7 +159,7 @@ def write_catalog(boxsets, img, wcs_helper, f):
 
     beamarea = wcs_helper.beamarea_pix()
 
-    for i, boxset in enumerate(boxsets):
+    for boxset in boxsets:
         bounds = boxset.bounds
         X = bounds[2] - bounds[0]
         Y = bounds[3] - bounds[1]
@@ -177,7 +177,7 @@ def write_catalog(boxsets, img, wcs_helper, f):
         x1, y1 = wcs_helper.pix2world(bounds[0:2])
         x2, y2 = wcs_helper.pix2world(bounds[2:4])
 
-        writer.writerow([i + 1, x, y, x1, y1, x2, y2, total_flux, integrated_flux,
+        writer.writerow([boxset.id, x, y, x1, y1, x2, y2, total_flux, integrated_flux,
                          peak_flux, peak_flux95])
 
     f.close()
@@ -194,7 +194,8 @@ def write_annotations(shapes, wcs_helper, f):
     f.write('\n')
 
     for shape in shapes:
-        f.write(shape.annotation(wcs_helper))
+        for line in shape.annotation(wcs_helper):
+            f.write(line + "\n")
 
     f.close()
 
