@@ -1,0 +1,15 @@
+# Python cache files
+__pycache__
+
+# Pip/setuptools
+*egg-info
+
+# Cython build files
+build/
+sorcerer/*.c
+sorcerer/*.so
+
+# Output files
+*.fits
+*.ann
+*.csv

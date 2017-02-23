@@ -1,0 +1,5 @@
+atropy
+cython
+numpy
+scipy
+tqdm

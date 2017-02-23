@@ -1,0 +1,239 @@
+#! /usr/bin/env python3
+
+import argparse
+import csv
+import itertools
+import math
+import os
+import os.path
+from multiprocessing import Pool
+import sys
+
+from astropy.io import fits
+import numpy as np
+import numpy.ma as ma
+from scipy.stats import norm, binom
+
+from sorcerer.search import searcher
+from sorcerer.iimg import ThresholdIntegral
+from sorcerer.postprocessing import merge
+from sorcerer.wcs_helper import WCSHelper
+
+
+# Set the SNR array as a global object, to allow access
+# from multiprocess workers, without pickling.
+snr = None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="""A source finding tool, for locating and characterising
+                    sources in astronomical radio images.""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(type=str, dest='file',
+                        help='The path of FITS file to analyze.',)
+    parser.add_argument('--grid', type=intplus, action='append', nargs=2,
+                        required=True,
+                        metavar=('grid', 'overlaps'),
+                        help="""A grid/overlap pair. The grid size indicates
+                             the size of the tiles used to search the image,
+                             whilst the overlap value indicates how many times
+                             to shift the grid. Ideally the overlap values
+                             should divide the grid size. More overlaps are
+                             better, but each overlap results in a complete
+                             search of the image. A typical value might be
+                             (12, 4), which indicates a grid size of 12 pixels,
+                             with 4 overlapping grids, each offset by 3
+                             pixels.""")
+    parser.add_argument('--sensitivity', type=float, default=10,
+                        help="""The sensitivity of the search, from which SNR
+                             thresholds are calculated per grid size. Higher
+                             numbers indicate a higher threshold is required
+                             for a tile to be recognised as containing a
+                             source.""")
+    parser.add_argument('--clobber', action='store_true',
+                        help="""The files <file>-sorcerer.{csv,ann} will be
+                             created in the current directory. This flag
+                             indicates whether to overwrite any existing files
+                             of the same names.""")
+    parser.add_argument('--workers', type=intplus, default=os.cpu_count(),
+                        help="""By default, all cpu cores are used during
+                             searching. The number of workers can be overrideen
+                             here.""")
+    args = parser.parse_args()
+
+    # Check the sanity of the grid/overlap pairs
+    for grid, overlap in args.grid:
+        if overlap > grid:
+            print("ERROR: Invalid grid/overlap pair: ({}, {})".format(grid, overlap, file=sys.stderr))
+            print("Overlaps cannot be greater than the grid size.", file=sys.stderr)
+            sys.exit(1)
+
+    # Open the FITS file.
+    # For now, we assume to use the first section and that the image is 2D.
+    hdulist = fits.open(args.file)
+    img = np.squeeze(hdulist[0].data)
+
+    # Open output files now, so that we can fail early if any permission
+    # issues exist.
+    prefix = os.path.splitext(os.path.basename(args.file))[0] + '-sorcerer'
+    mode = 'w' if args.clobber else 'x'
+    try:
+        annotation_file = open(prefix + '.ann', mode)
+        catalog_file = open(prefix + '.csv', mode)
+    except FileExistsError as e:
+        print("ERROR: Refusing to clobber file since --clobber is not set.", file=sys.stderr)
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+
+    wcs_helper = WCSHelper(hdulist[0].header)
+    print("Beam area: {:.1f}px".format(wcs_helper.beamarea_pix()))
+
+    mean, sigma = background(img)
+
+    # We assign snr to a global variable to avoid copying
+    # when we spawn workers.
+    global snr
+    snr = np.nan_to_num((img - mean) / sigma)
+
+    print("Beginning search for sources...")
+    p = 1/10**args.sensitivity
+
+    # We sort the tiles to start searching the smallest tiles first, and meanwhile use
+    # the other workers to search the larger grid sizes.
+    map_args = [(grid, overlaps, threshold(p, wcs_helper.beamarea_pix(), grid**2))
+                for grid, overlaps in sorted(args.grid)]
+    if args.workers == 1:
+        map_output = itertools.starmap(workerspawn, map_args)
+    else:
+        pool = Pool(args.workers)
+        map_output = pool.starmap(workerspawn, map_args)
+
+    boxes = [box for boxes in map_output for box in boxes]
+
+    boxsets = merge(boxes)
+
+    write_catalog(boxsets, img-mean, wcs_helper, catalog_file)
+    write_annotations(boxsets, wcs_helper, annotation_file)
+
+
+def background(img):
+    print("Calculating background statistics...")
+    img = img[~np.isnan(img)]
+
+    # Do 3 sigma clipping, 3 times.
+    for _ in range(3):
+        sigma = img.std()
+        mean = img.mean()
+        img = img[img < mean + 3 * sigma]
+
+    mean, sigma = img.mean(), img.std()
+    print("Background mean: ", mean, " standard deviation: ", sigma)
+    return mean, sigma
+
+
+def workerspawn(grid, overlaps, threshold):
+    print(" - grid {}; overlaps {}; threshold {}".format(grid, overlaps, threshold))
+    iimg = ThresholdIntegral(snr, threshold)
+
+    boxes = []
+    for offset in range(overlaps):
+        origin = offset * (grid // overlaps)
+        boxes += searcher(iimg, grid, origin)
+
+    return boxes
+
+
+def write_catalog(boxsets, img, wcs_helper, f):
+    print("Writing catalog file: {}".format(f.name))
+
+    writer = csv.writer(f)
+    writer.writerow(['ID', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'Total Flux', 'Integrated Flux',
+                     'Peak Flux', 'Peak Flux (95 Percentile)'])
+    writer.writerow(['', '(degrees)', '(degrees)', '(degrees)', '(degrees)',
+                     '(degrees)', '(degrees)'])
+
+    beamarea = wcs_helper.beamarea_pix()
+
+    for i, boxset in enumerate(boxsets):
+        bounds = boxset.bounds
+        X = bounds[2] - bounds[0]
+        Y = bounds[3] - bounds[1]
+        mask = np.zeros((Y, X), dtype=np.bool)
+        mask = boxset.window(mask, origin=(bounds[0:2]))
+        source = ma.array(img[bounds[1]:bounds[3], bounds[0]:bounds[2]],
+                          mask=~mask).compressed()
+
+        total_flux = source.sum()
+        integrated_flux = total_flux / beamarea
+        peak_flux = source.max()
+        peak_flux95 = np.percentile(source, 95)
+
+        x, y = wcs_helper.pix2world(boxset.center())
+        x1, y1 = wcs_helper.pix2world(bounds[0:2])
+        x2, y2 = wcs_helper.pix2world(bounds[2:4])
+
+        writer.writerow([i + 1, x, y, x1, y1, x2, y2, total_flux, integrated_flux,
+                         peak_flux, peak_flux95])
+
+    f.close()
+
+
+def write_annotations(shapes, wcs_helper, f):
+    print("Writing to annotation file: {}".format(f.name))
+
+    f.write('# KARMA ANNOTATION FILE\n')
+    f.write('\n')
+    f.write('COORD W\n')
+    f.write('PA STANDARD\n')
+    f.write('COLOR GREEN\n')
+    f.write('\n')
+
+    for shape in shapes:
+        f.write(shape.annotation(wcs_helper))
+
+    f.close()
+
+
+def threshold(p, beamarea, gridarea):
+    # We only care about scaling the threshold based
+    # on the beam area, not the actual ratio. By dividing by 4,
+    # we avoid irregularities for small numbers.
+    if gridarea < beamarea:
+        print("WARNING: grid area ({}x{}) is less than beam area ({})".format(
+            int(math.sqrt(gridarea)), int(math.sqrt(gridarea)),  beamarea),
+            file=sys.stderr)
+
+    samples = gridarea // (beamarea / 4)
+    half = samples // 2
+
+    if half < 1:
+        samples = 2
+        half = 1
+
+    for i in np.arange(0, 20, 0.01):
+        if binom.cdf(half, samples, norm.cdf(i)) < p:
+            return i
+
+    raise Exception("Probability requires threshold value to be set too high.")
+
+
+def intplus(val):
+    """Type check to ensure gird values are strictly postivie integers."""
+    try:
+        val = int(val)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+
+    if val < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+
+    return val
+
+
+if __name__ == '__main__':
+    main()
