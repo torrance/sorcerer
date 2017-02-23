@@ -14,9 +14,16 @@ Sorcerer is therefore well suited for both small bright sources as well as large
 
         sorcerer --grid 40 8 --grid 30 10 --grid 24 12 --grid 16 8 --grid 12 6 --grid 8 8 --grid 4 4 --sensitivity 12 High_resolution_region_A.fits
 
-![Example of both point and diffuse source detection](https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example-subsection.png)
-
-[View the full source detection map](https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example.png) (60Mb).
+<a style="display: block; float: left; margin: 0 5px" href="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example1.png">
+        <img alt="Example of point source detections" width=280px src="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example1.png" />
+</a>
+<a style="display: block; float: left; margin: 0 5px" href="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example2.png">
+        <img alt="Example of both point and diffuse source detections" width=280px src="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example2.png" />
+</a>
+<a style="display: block; float: left; margin: 0 5px" href="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example3.png">
+        <img alt="Example of diffuse source detection" width=280px src="https://raw.githubusercontent.com/torrance/sorcerer/master/examples/example3.png" />
+</a>
+<div style="clear: both;"></div>
 
 ## Installing
 
