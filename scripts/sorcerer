@@ -2,7 +2,9 @@
 
 import argparse
 import csv
+import gzip
 import itertools
+import lzma
 import math
 import os
 import os.path
@@ -61,6 +63,19 @@ def main():
                         help="""By default, all cpu cores are used during
                              searching. The number of workers can be overrideen
                              here.""")
+    parser.add_argument('--cutout', action='store_true',
+                        help="""Optionally create a compressed cutout FITS file
+                             (<file>-sorcerer.fits.{xz,gz}) with all background
+                             pixels set as NaN.""")
+    parser.add_argument('--cutout-margin', type=intzeroplus, default=5,
+                        help="""Grow cutout regions by a number of pixels in all
+                             directions.""")
+    parser.add_argument('--cutout-compression', type=str, default='xz',
+                        choices=['xz', 'gz', 'none'],
+                        help="""Specify the file compression to be used on the
+                             cutout FITS file. LZMA (xz) provides the highest
+                             compression, whilst GZIP (gz) is faster is may be
+                             more compatibile with existing tools.""")
     args = parser.parse_args()
 
     # Check the sanity of the grid/overlap pairs
@@ -82,6 +97,13 @@ def main():
     try:
         annotation_file = open(prefix + '.ann', mode)
         catalog_file = open(prefix + '.csv', mode)
+        if args.cutout:
+            if args.cutout_compression == 'xz':
+                cutout_file = lzma.open(prefix + '.fits.xz', mode)
+            elif args.cutout_compression == 'gz':
+                cutout_file = gzip.open(prefix + '.fits.gz', mode)
+            else:
+                cutout_file = open(prefix + '.fits', mode)
     except FileExistsError as e:
         print("ERROR: Refusing to clobber file since --clobber is not set.", file=sys.stderr)
         print(e, file=sys.stderr)
@@ -117,6 +139,9 @@ def main():
 
     boxsets = merge(boxes)
 
+    # Output time
+    if args.cutout:
+        write_cutout(boxsets, hdulist[0], args.cutout_margin, cutout_file)
     write_catalog(boxsets, img-mean, wcs_helper, catalog_file)
     write_annotations(boxsets, wcs_helper, annotation_file)
 
@@ -183,7 +208,7 @@ def write_catalog(boxsets, img, wcs_helper, f):
     f.close()
 
 
-def write_annotations(shapes, wcs_helper, f):
+def write_annotations(boxsets, wcs_helper, f):
     print("Writing to annotation file: {}".format(f.name))
 
     f.write('# KARMA ANNOTATION FILE\n')
@@ -193,10 +218,39 @@ def write_annotations(shapes, wcs_helper, f):
     f.write('COLOR GREEN\n')
     f.write('\n')
 
-    for shape in shapes:
-        for line in shape.annotation(wcs_helper):
+    for boxset in boxsets:
+        for line in boxset.annotation(wcs_helper):
             f.write(line + "\n")
 
+    f.close()
+
+
+def write_cutout(boxsets, hdu, margin, f):
+    print("Creating compressed FITS file...")
+    img = np.squeeze(hdu.data)
+    header = hdu.header
+
+    mask = np.zeros(img.shape, np.bool)
+    for boxset in boxsets:
+        boxset.window(mask)
+
+    # Grow the mask:
+    for _ in range(margin):
+        # Shift up
+        mask[1:, :] = np.logical_or(mask[1:, :], mask[0:-1, :])
+        # Shift down
+        mask[0:-1, :] = np.logical_or(mask[0:-1, :], mask[1:, :])
+        # Shift right
+        mask[:, 1:] = np.logical_or(mask[:, 1:], mask[:, 0:-1])
+        # Shift left
+        mask[:, 0:-1] = np.logical_or(mask[:, 0:-1], mask[:, 1:])
+
+    img[~mask] = np.nan
+    cutout = fits.PrimaryHDU(img)
+    cutout.header = header.copy()
+    cutout.update_header()
+
+    cutout.writeto(f)
     f.close()
 
 
@@ -231,6 +285,19 @@ def intplus(val):
         raise argparse.ArgumentTypeError("must be a positive integer")
 
     if val < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+
+    return val
+
+
+def intzeroplus(val):
+    """Type check to ensure gird values are strictly postivie integers."""
+    try:
+        val = int(val)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+
+    if val < 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
 
     return val

@@ -51,6 +51,8 @@ Put simply, increasing `--sensitivity` will reduce the number of sources detecte
 
 Sorcerer outputs both a catalog CSV and a KVIS annotation file in the current directory, `<filename>-sorcerer.{ann,csv}`.
 
+Optionally, Sorcerer can output a highly compressed FITS file of the original image containing _only_ the sources. By passing `--cutout`, this file will be created at `<filename>-sorcerer.fits.{xz,gz}`. See `--help` for additional cutout configuration options.
+
 ### Examples:
 
 > Search at multiple grid sizes:
