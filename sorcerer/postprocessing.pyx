@@ -4,13 +4,22 @@ import numpy as np
 from tqdm import tqdm
 
 cimport numpy as np
-from sorcerer.boxset cimport BoxSet
+from sorcerer.boxset cimport Box, BoxSet
 
 
 def merge(boxes, overlap_factor):
     print("Merging (non-greedy) {} boxes...".format(len(boxes)))
+    boxsets = _merge(boxes, overlap_factor)
+    print("Merging complete: {} boxes remain".format(len(boxsets)))
+    return boxsets
 
+
+cdef _merge(boxes, double overlap_factor):
     boxsets = []
+
+    cdef int i, candidate
+    cdef Box box
+    cdef BoxSet boxset, primary
     for box in tqdm(boxes):
         # Search for candidate groups for each box.
         # There may be multiple previoulsy separate groups
@@ -44,8 +53,5 @@ def merge(boxes, overlap_factor):
             # Start its own group
             boxsets.append(BoxSet(box))
 
-    print("Merging complete: {} boxes remain".format(len(boxsets)))
     return boxsets
-
-
 

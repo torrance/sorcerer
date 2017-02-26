@@ -7,26 +7,34 @@ import numpy as np
 cdef int uid = 0
 
 
+cdef class Box:
+    def __cinit__(self, int x1, int y1, int x2, int y2):
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+
+    def __reduce__(self):
+        return (Box, (self.x1, self.y1, self.x2, self.y2))
+
+
 cdef class BoxSet:
-    def __cinit__(self, object box):
+    def __cinit__(self, Box box):
         global uid
         uid += 1
 
         self.id = uid
         self.boxes = [box]
-        self.bounds[0] = box[0]
-        self.bounds[1] = box[1]
-        self.bounds[2] = box[2]
-        self.bounds[3] = box[3]
+        self.bounds = box
 
-    cpdef void append(self, object box):
+    cpdef void append(self, Box box):
         self.boxes.append(box)
-        self.bounds[0] = min(self.bounds[0], box[0])
-        self.bounds[1] = min(self.bounds[1], box[1])
-        self.bounds[2] = max(self.bounds[2], box[2])
-        self.bounds[3] = max(self.bounds[3], box[3])
+        self.bounds.x1 = min(self.bounds.x1, box.x1)
+        self.bounds.y1 = min(self.bounds.y1, box.y1)
+        self.bounds.x2 = max(self.bounds.x2, box.x2)
+        self.bounds.y2 = max(self.bounds.y2, box.y2)
 
-    cpdef int overlap(self, object otherbox, double overlap_factor):
+    cpdef int overlap(self, Box otherbox, double overlap_factor):
         if not overlap(self.bounds, otherbox, 0):
             return 0
 
@@ -36,28 +44,28 @@ cdef class BoxSet:
 
         return 0
 
-    def __iadd__(self, other):
+    def __iadd__(self, BoxSet other):
         for otherbox in other.boxes:
             self.append(otherbox)
 
         return self
 
     def center(self):
-        width = self.bounds[2] - self.bounds[0]
-        height = self.bounds[3] - self.bounds[1]
-        return self.bounds[0] + width/2, self.bounds[1] + height / 2
+        width = self.bounds.x2 - self.bounds.x1
+        height = self.bounds.y2 - self.bounds.y1
+        return self.bounds.x1 + width/2, self.bounds.y1 + height / 2
 
     def window(self, grid, origin=(0, 0)):
-        for x1, y1, x2, y2 in self.boxes:
-            grid[y1-origin[1]:y2-origin[1], x1-origin[0]:x2-origin[0]] = True
+        for box in self.boxes:
+            grid[box.y1-origin[1]:box.y2-origin[1], box.x1-origin[0]:box.x2-origin[0]] = True
 
         return grid
 
     def vertices(self):
         # Add a 1px border to the grid.
-        grid = np.zeros((self.bounds[3]-self.bounds[1]+2, self.bounds[2]-self.bounds[0]+2),
+        grid = np.zeros((self.bounds.y2-self.bounds.y1+2, self.bounds.x2-self.bounds.x1+2),
                         dtype=np.bool)
-        window = self.window(grid, origin=(self.bounds[0] - 1, self.bounds[1] - 1))
+        window = self.window(grid, origin=(self.bounds.x1 - 1, self.bounds.y1 - 1))
 
         right = (1, 0)
         left = (-1, 0)
@@ -98,7 +106,7 @@ cdef class BoxSet:
             raise VerticesException("Failed to calculate vertices for {}".format(self.id))
 
         # Correct for non-zero origin from adding the 1px border.
-        vertices = [(vertex[0] + self.bounds[0] - 1, vertex[1] + self.bounds[1] - 1) for vertex in vertices]
+        vertices = [(vertex[0] + self.bounds.x1 - 1, vertex[1] + self.bounds.y1 - 1) for vertex in vertices]
         return vertices
 
     def annotation(self, wcs_helper):
@@ -132,75 +140,70 @@ def perimeter(pos, grid):
     return result
 
 
-cdef int overlap(a, b, double overlap_factor):
+cdef int overlap(Box a, Box b, double overlap_factor):
     # Todo: This doesn't doesn't work correctly for overlapping boxes
     # when none of their corners overlap.
 
-    cdef int a0, a1, a2, a3
-    cdef int b0, b1, b2, b3
-    a0, a1, a2, a3 = a[0], a[1], a[2], a[3]
-    b0, b1, b2, b3 = b[0], b[1], b[2], b[3]
-
     cdef double area
-    area = (a2 - a0) * (a3 - a1)
+    area = (a.x2 - a.x1) * (a.y2 - a.y1)
 
     # Bottom left
     if (
-        b0 <= a0 < b2
-        and b1 <= a1 < b3
-        and ((b2 - a0) * (b3 - a1)) / area >= overlap_factor
+        b.x1 <= a.x1 < b.x2
+        and b.y1 <= a.y1 < b.y2
+        and ((b.x2 - a.x1) * (b.y2 - a.y1)) / area >= overlap_factor
     ):
         return 1
     # Top right
     if (
-        b0 <= a2 < b2
-        and b1 <= a3 < b3
-        and ((a2 - b0) * (a3 - b1)) / area >= overlap_factor
+        b.x1 <= a.x2 < b.x2
+        and b.y1 <= a.y2 < b.y2
+        and ((a.x2 - b.x1) * (a.y2 - b.y1)) / area >= overlap_factor
     ):
         return 1
     # Top left
     if (
-        b0 <= a0 < b2
-        and b1 <= a3 < b3
-        and ((b2 - a0) * (a3 - b1)) / area >= overlap_factor
+        b.x1 <= a.x1 < b.x2
+        and b.y1 <= a.y2 < b.y2
+        and ((b.x2 - a.x1) * (a.y2 - b.y1)) / area >= overlap_factor
     ):
         return 1
     # Bottom right
     if (
-        b0 <= a2 < b2
-        and b1 <= a1 < b3
-        and ((a2 - b0) * (b3 - a1)) / area >= overlap_factor
+        b.x1 <= a.x2 < b.x2
+        and b.y1 <= a.y1 < b.y2
+        and ((a.x2 - b.x1) * (b.y2 - a.y1)) / area >= overlap_factor
     ):
         return 1
 
-    area = (b2 - b0) * (b3 - b1)
+    area = (b.x2 - b.x1) * (b.y2 - b.y1)
 
     # Bottom left
     if (
-        a0 <= b0 < a2
-        and a1 <= b1 < a3
-        and ((a2 - b0) * (a3 - b1)) / area >= overlap_factor
+        a.x1 <= b.x1 < a.x2
+        and a.y1 <= b.y1 < a.y2
+        and ((a.x2 - b.x1) * (a.y2 - b.y1)) / area >= overlap_factor
     ):
         return 1
     # Top right
     if (
-        a0 <= b2 < a2
-        and a1 <= b3 < a3
-        and ((b2 - a0) * (b3 - a1)) / area >= overlap_factor
+        a.x1 <= b.x2 < a.x2
+        and a.y1 <= b.y2 < a.y2
+        and ((b.x2 - a.x1) * (b.y2 - a.y1)) / area >= overlap_factor
     ):
         return 1
     # Top left
     if (
-        a0 <= b0 < a2
-        and a1 <= b3 < a3
-        and ((a2 - b0) * (b3 - a1)) / area >= overlap_factor
+        a.x1 <= b.x1 < a.x2
+        and a.y1 <= b.y2 < a.y2
+        and ((a.x2 - b.x1) * (b.y2 - a.y1)) / area >= overlap_factor
     ):
         return 1
     # Bottom right
     if (
-        a0 <= b2 < a2
-        and a1 <= b1 < a3
-        and ((b2 - a0) * (a3 - b1)) / area >= overlap_factor
+        a.x1 <= b.x2 < a.x2
+        and a.y1 <= b.y1 < a.y2
+        and ((b.x2 - a.x1) * (a.y2 - b.y1)) / area >= overlap_factor
     ):
         return 1
 

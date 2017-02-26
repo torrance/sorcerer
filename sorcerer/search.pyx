@@ -1,3 +1,4 @@
+from sorcerer.boxset cimport Box
 from sorcerer.iimg cimport ThresholdIntegral
 
 
@@ -14,6 +15,7 @@ cdef _searcher(ThresholdIntegral iimg, int grid, int xorigin, int yorigin):
             gridsum = iimg.count(x, y, x + grid, y + grid)
 
             if (gridsum / total) >= 0.5:
-                boxes.append((x, y, x + grid, y + grid))
+                box = Box(x, y, x + grid, y + grid)
+                boxes.append(box)
 
     return boxes

@@ -20,11 +20,11 @@ def write_catalog(boxsets, img, wcs_helper, f):
 
     for boxset in boxsets:
         bounds = boxset.bounds
-        X = bounds[2] - bounds[0]
-        Y = bounds[3] - bounds[1]
+        X = bounds.x2 - bounds.x1
+        Y = bounds.y2 - bounds.y1
         mask = np.zeros((Y, X), dtype=np.bool)
-        mask = boxset.window(mask, origin=(bounds[0:2]))
-        source = ma.array(img[bounds[1]:bounds[3], bounds[0]:bounds[2]],
+        mask = boxset.window(mask, origin=(bounds.x1, bounds.y1))
+        source = ma.array(img[bounds.y1:bounds.y2, bounds.x1:bounds.x2],
                           mask=~mask).compressed()
 
         total_flux = source.sum()
@@ -33,8 +33,8 @@ def write_catalog(boxsets, img, wcs_helper, f):
         peak_flux95 = np.percentile(source, 95)
 
         x, y = wcs_helper.pix2world(boxset.center())
-        x1, y1 = wcs_helper.pix2world(bounds[0:2])
-        x2, y2 = wcs_helper.pix2world(bounds[2:4])
+        x1, y1 = wcs_helper.pix2world([bounds.x1, bounds.y1])
+        x2, y2 = wcs_helper.pix2world([bounds.x2, bounds.y2])
 
         writer.writerow([boxset.id, x, y, x1, y1, x2, y2, total_flux, integrated_flux,
                          peak_flux, peak_flux95])
