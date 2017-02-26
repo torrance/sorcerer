@@ -179,28 +179,28 @@ cdef int overlap(a, b, double overlap_factor):
     if (
         a0 <= b0 < a2
         and a1 <= b1 < a3
-        and ((b2 - b0) * (b3 - b1)) / area >= overlap_factor
+        and ((a2 - b0) * (a3 - b1)) / area >= overlap_factor
     ):
         return 1
     # Top right
     if (
         a0 <= b2 < a2
         and a1 <= b3 < a3
-        and ((a2 - a0) * (a3 - a1)) / area >= overlap_factor
+        and ((b2 - a0) * (b3 - a1)) / area >= overlap_factor
     ):
         return 1
     # Top left
     if (
         a0 <= b0 < a2
         and a1 <= b3 < a3
-        and ((b2 - b0) * (a3 - a1)) / area >= overlap_factor
+        and ((a2 - b0) * (b3 - a1)) / area >= overlap_factor
     ):
         return 1
     # Bottom right
     if (
         a0 <= b2 < a2
         and a1 <= b1 < a3
-        and ((a2 - a0) * (b3 - b1)) / area >= overlap_factor
+        and ((b2 - a0) * (a3 - b1)) / area >= overlap_factor
     ):
         return 1
 
