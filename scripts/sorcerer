@@ -62,6 +62,9 @@ def main():
                              simplified tiling arrangement is used. This is
                              useful for very small sources that need to be
                              perfectly centred.""")
+    parser.add_argument('--overlap-factor', type=float, default=0.2,
+                        help="""For two tiles to be merged, their areas must
+                             overlap by this factor.""")
     parser.add_argument('--clobber', action='store_true',
                         help="""The files <file>-sorcerer.{csv,ann} will be
                              created in the current directory. This flag
@@ -145,7 +148,7 @@ def main():
 
     boxes = [box for boxes in map_output for box in boxes]
 
-    boxsets = merge(boxes)
+    boxsets = merge(boxes, args.overlap_factor)
 
     # Output time
     if args.cutout:

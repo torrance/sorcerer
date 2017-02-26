@@ -7,7 +7,7 @@ cimport numpy as np
 from sorcerer.boxset cimport BoxSet
 
 
-def merge(boxes):
+def merge(boxes, overlap_factor):
     print("Merging (non-greedy) {} boxes...".format(len(boxes)))
 
     boxsets = []
@@ -17,7 +17,7 @@ def merge(boxes):
         # that a box bridges.
         candidates = []
         for i, boxset in enumerate(boxsets):
-            if boxset.overlap(box):
+            if boxset.overlap(box, overlap_factor):
                 candidates.append(i)
 
         # This is important: we sort the candidates list

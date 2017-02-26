@@ -26,12 +26,12 @@ cdef class BoxSet:
         self.bounds[2] = max(self.bounds[2], box[2])
         self.bounds[3] = max(self.bounds[3], box[3])
 
-    cpdef int overlap(self, object otherbox):
-        if not overlap(self.bounds, otherbox):
+    cpdef int overlap(self, object otherbox, double overlap_factor):
+        if not overlap(self.bounds, otherbox, 0):
             return 0
 
         for box in self.boxes:
-            if overlap(box, otherbox):
+            if overlap(box, otherbox, overlap_factor):
                 return 1
 
         return 0
@@ -132,7 +132,7 @@ def perimeter(pos, grid):
     return result
 
 
-cdef int overlap(a, b):
+cdef int overlap(a, b, double overlap_factor):
     # Todo: This doesn't doesn't work correctly for overlapping boxes
     # when none of their corners overlap.
 
@@ -141,54 +141,66 @@ cdef int overlap(a, b):
     a0, a1, a2, a3 = a[0], a[1], a[2], a[3]
     b0, b1, b2, b3 = b[0], b[1], b[2], b[3]
 
-    # Bottom left
-    if (
-        a0 <= b0 < a2
-        and a1 <= b1 < a3
-    ):
-        return 1
-    # Top right
-    if (
-        a0 <= b2 < a2
-        and a1 <= b3 < a3
-    ):
-        return 1
-    # Top left
-    if (
-        a0 <= b0 < a2
-        and a1 <= b3 < a3
-    ):
-        return 1
-    # Bottom right
-    if (
-        a0 <= b2 < a2
-        and a1 <= b1 < a3
-    ):
-        return 1
+    cdef double area
+    area = (a2 - a0) * (a3 - a1)
 
     # Bottom left
     if (
         b0 <= a0 < b2
         and b1 <= a1 < b3
+        and ((b2 - a0) * (b3 - a1)) / area >= overlap_factor
     ):
         return 1
-
     # Top right
     if (
         b0 <= a2 < b2
         and b1 <= a3 < b3
+        and ((a2 - b0) * (a3 - b1)) / area >= overlap_factor
     ):
         return 1
     # Top left
     if (
         b0 <= a0 < b2
         and b1 <= a3 < b3
+        and ((b2 - a0) * (a3 - b1)) / area >= overlap_factor
     ):
         return 1
     # Bottom right
     if (
         b0 <= a2 < b2
         and b1 <= a1 < b3
+        and ((a2 - b0) * (b3 - a1)) / area >= overlap_factor
+    ):
+        return 1
+
+    area = (b2 - b0) * (b3 - b1)
+
+    # Bottom left
+    if (
+        a0 <= b0 < a2
+        and a1 <= b1 < a3
+        and ((b2 - b0) * (b3 - b1)) / area >= overlap_factor
+    ):
+        return 1
+    # Top right
+    if (
+        a0 <= b2 < a2
+        and a1 <= b3 < a3
+        and ((a2 - a0) * (a3 - a1)) / area >= overlap_factor
+    ):
+        return 1
+    # Top left
+    if (
+        a0 <= b0 < a2
+        and a1 <= b3 < a3
+        and ((b2 - b0) * (a3 - a1)) / area >= overlap_factor
+    ):
+        return 1
+    # Bottom right
+    if (
+        a0 <= b2 < a2
+        and a1 <= b1 < a3
+        and ((a2 - a0) * (b3 - b1)) / area >= overlap_factor
     ):
         return 1
 
