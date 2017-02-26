@@ -16,9 +16,10 @@ import numpy as np
 import numpy.ma as ma
 from scipy.stats import norm, binom
 
-from sorcerer.search import searcher
+from sorcerer.boxset import VerticesException
 from sorcerer.iimg import ThresholdIntegral
 from sorcerer.postprocessing import merge
+from sorcerer.search import searcher
 from sorcerer.wcs_helper import WCSHelper
 
 
@@ -219,8 +220,11 @@ def write_annotations(boxsets, wcs_helper, f):
     f.write('\n')
 
     for boxset in boxsets:
-        for line in boxset.annotation(wcs_helper):
-            f.write(line + "\n")
+        try:
+            for line in boxset.annotation(wcs_helper):
+                f.write(line + "\n")
+        except VerticesException as e:
+            print("WARNING: " + str(e))
 
     f.close()
 

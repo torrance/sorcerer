@@ -72,7 +72,7 @@ cdef class BoxSet:
 
         # Now find the rest
         vertices = [pos]
-        while True:
+        for _ in range(999):
             # Walk along perimeter until we find next vertex
             while perimeter((pos[0] + direction[0], pos[1] + direction[1]), window):
                 pos = (pos[0] + direction[0], pos[1] + direction[1])
@@ -89,11 +89,13 @@ cdef class BoxSet:
                 else:
                     direction = down
             else:
-                newpos = (pos[0] + left[0], pos[1] + left[1])
+                newpos = (pos[0] + right[0], pos[1] + right[1])
                 if perimeter(newpos, window):
-                    direction = left
-                else:
                     direction = right
+                else:
+                    direction = left
+        else:
+            raise VerticesException("Failed to calculate vertices for {}".format(self.id))
 
         # Correct for non-zero origin from adding the 1px border.
         vertices = [(vertex[0] + self.bounds[0] - 1, vertex[1] + self.bounds[1] - 1) for vertex in vertices]
@@ -191,3 +193,7 @@ cdef int overlap(a, b):
         return 1
 
     return 0
+
+
+class VerticesException(Exception):
+    pass
