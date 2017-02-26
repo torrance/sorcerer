@@ -55,6 +55,13 @@ def main():
                              numbers indicate a higher threshold is required
                              for a tile to be recognised as containing a
                              source.""")
+    parser.add_argument('--exhaustive', type=int, default=5,
+                        help="""An exhaustive tiling arrangement will be used
+                             for grid sizes at or below this limit, resulting
+                             in overlaps^2 searches. Above this limit, a
+                             simplified tiling arrangement is used. This is
+                             useful for very small sources that need to be
+                             perfectly centred.""")
     parser.add_argument('--clobber', action='store_true',
                         help="""The files <file>-sorcerer.{csv,ann} will be
                              created in the current directory. This flag
@@ -128,7 +135,7 @@ def main():
 
     # We sort the tiles to start searching the smallest tiles first, and meanwhile use
     # the other workers to search the larger grid sizes.
-    map_args = [(grid, overlaps, threshold(p, wcs_helper.beamarea_pix(), grid**2))
+    map_args = [(grid, overlaps, threshold(p, wcs_helper.beamarea_pix(), grid**2), args.exhaustive)
                 for grid, overlaps in sorted(args.grid)]
     if args.workers == 1:
         map_output = itertools.starmap(workerspawn, map_args)
@@ -162,14 +169,22 @@ def background(img):
     return mean, sigma
 
 
-def workerspawn(grid, overlaps, threshold):
+def workerspawn(grid, overlaps, threshold, exhaustive_limit):
     print(" - grid {}; overlaps {}; threshold {}".format(grid, overlaps, threshold))
     iimg = ThresholdIntegral(snr, threshold)
 
     boxes = []
-    for offset in range(overlaps):
-        origin = offset * (grid // overlaps)
-        boxes += searcher(iimg, grid, origin)
+
+    if grid <= exhaustive_limit:
+        for xoffset in range(overlaps):
+            xorigin = xoffset * (grid // overlaps)
+            for yoffset in range(overlaps):
+                yorigin = yoffset * (grid // overlaps)
+                boxes += searcher(iimg, grid, (xorigin, yorigin))
+    else:
+        for offset in range(overlaps):
+            origin = offset * (grid // overlaps)
+            boxes += searcher(iimg, grid, (origin, origin))
 
     return boxes
 

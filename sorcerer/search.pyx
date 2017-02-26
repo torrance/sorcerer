@@ -1,16 +1,16 @@
 from sorcerer.iimg cimport ThresholdIntegral
 
 
-def searcher(ThresholdIntegral iimg, int grid, int origin):
-    return _searcher(iimg, grid, origin)
+def searcher(ThresholdIntegral iimg, int grid, origin):
+    return _searcher(iimg, grid, origin[0], origin[1])
 
 
-cdef _searcher(ThresholdIntegral iimg, int grid, int origin):
+cdef _searcher(ThresholdIntegral iimg, int grid, int xorigin, int yorigin):
     boxes = []
-    total = (grid - 1) * (grid - 1)
+    total = grid * grid
 
-    for x in range(origin, iimg.X - grid, grid):
-        for y in range(origin, iimg.Y - grid, grid):
+    for x in range(xorigin, iimg.X - grid, grid):
+        for y in range(yorigin, iimg.Y - grid, grid):
             gridsum = iimg.count(x, y, x + grid, y + grid)
 
             if (gridsum / total) >= 0.5:
