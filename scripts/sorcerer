@@ -146,7 +146,7 @@ def main():
 
     boxes = [box for boxes in map_output for box in boxes]
 
-    boxsets = merge(boxes, args.overlap_factor)
+    boxsets = merge(boxes, snr.shape, args.overlap_factor)
 
     # Output time
     if args.cutout:

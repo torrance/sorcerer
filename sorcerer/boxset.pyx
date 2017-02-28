@@ -7,6 +7,80 @@ import numpy as np
 cdef int uid = 0
 
 
+cdef class Tree:
+    def __cinit__(self, x1, y1, x2, y2):
+        self.bounds = Box(x1, y1, x2, y2)
+
+        cdef int width, height
+        if x2 - x1 >= y2 - y1 and x2 - x1 > 250:
+            width = (x2 - x1) // 2
+            self.leaf1 = Tree(x1, y1, x1 + width, y2)
+            self.leaf2 = Tree(x1 + width, y1, x2, y2)
+            self.is_leaf = 0
+        elif y2 - y1 >= x2 - x1 and y2 - y1 > 250:
+            height = (y2 - y1) // 2
+            self.leaf1 = Tree(x1, y1, x2, y1 + height)
+            self.leaf2 = Tree(x1, y1 + height, x2, y2)
+            self.is_leaf = 0
+        else:
+            self.is_leaf = 1
+            self.boxsets = set()
+
+    cdef void add(self, BoxSet boxset):
+        if overlap(self.bounds, boxset.bounds, 0):
+            if self.is_leaf:
+                self.boxsets.add(boxset)
+            else:
+                self.leaf1.add(boxset)
+                self.leaf2.add(boxset)
+
+    cdef void remove(self, BoxSet boxset):
+        if overlap(self.bounds, boxset.bounds, 0):
+            if self.is_leaf:
+                try:
+                    self.boxsets.remove(boxset)
+                except KeyError:
+                    print("KeyError: Failed to remove boxset {} {} {} {} from leaf {} {} {} {}".format(
+                        boxset.bounds.x1, boxset.bounds.y1, boxset.bounds.x2, boxset.bounds.y2,
+                        self.bounds.x1, self.bounds.y1, self.bounds.x2, self.bounds.y2))
+            else:
+                self.leaf1.remove(boxset)
+                self.leaf2.remove(boxset)
+
+    cdef object find(self, Box box, double overlap_factor):
+        cdef BoxSet boxset
+
+        if overlap(self.bounds, box, 0):
+            if self.is_leaf:
+                res = set()
+                for boxset in self.boxsets:
+                    if boxset.overlap(box, overlap_factor):
+                        res.add(boxset)
+                return res
+            else:
+                res1 = self.leaf1.find(box, overlap_factor)
+                res2 = self.leaf2.find(box, overlap_factor)
+                if res1 or res2:
+                    if res1 and res2:
+                        res1.update(res2)
+                        return res1
+                    elif res1:
+                        return res1
+                    elif res2:
+                        return res2
+
+        return None
+
+    cdef object getall(self):
+        if self.is_leaf:
+            return set(self.boxsets)
+        else:
+            res1 = self.leaf1.getall()
+            res2 = self.leaf2.getall()
+            res1.update(res2)
+            return res1
+
+
 cdef class Box:
     def __cinit__(self, int x1, int y1, int x2, int y2):
         self.x1 = x1
@@ -25,7 +99,7 @@ cdef class BoxSet:
 
         self.id = uid
         self.boxes = [box]
-        self.bounds = box
+        self.bounds = Box(box.x1, box.y1, box.x2, box.y2)
 
     cpdef void append(self, Box box):
         self.boxes.append(box)
