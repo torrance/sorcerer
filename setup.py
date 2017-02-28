@@ -29,7 +29,6 @@ setup(
         'cython',
         'numpy',
         'scipy',
-        'tqdm',
     ],
     scripts=['scripts/sorcerer'],
     ext_modules=cythonize(extensions),
