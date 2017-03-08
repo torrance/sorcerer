@@ -133,8 +133,8 @@ def main():
     global snr
     snr = np.nan_to_num((img - mean) / sigma)
 
-    print("Beginning search for sources...")
     p = 1/10**args.sensitivity
+    print("Beginning search for sources; false positive rate {:.2f}%".format(p * 100))
 
     # We sort the tiles to start searching the smallest tiles first, and meanwhile use
     # the other workers to search the larger grid sizes.
