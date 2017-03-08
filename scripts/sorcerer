@@ -220,7 +220,7 @@ def threshold(p, beamarea, gridarea):
 
 
 def intplus(val):
-    """Type check to ensure gird values are strictly postivie integers."""
+    """Type check to ensure grid values are strictly positive integers."""
     try:
         val = int(val)
     except ValueError:
@@ -233,7 +233,7 @@ def intplus(val):
 
 
 def intzeroplus(val):
-    """Type check to ensure gird values are strictly postivie integers."""
+    """Type check to ensure grid values are strictly positive integers."""
     try:
         val = int(val)
     except ValueError:
