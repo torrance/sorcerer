@@ -12,7 +12,9 @@ import sys
 
 from astropy.io import fits
 import numpy as np
-from scipy.stats import norm, binom
+from scipy.integrate import quad
+from scipy.special import beta
+from scipy.stats import norm
 
 from sorcerer.iimg import ThresholdIntegral
 from sorcerer.output import write_annotations, write_catalog, write_cutout
@@ -191,23 +193,27 @@ def workerspawn(grid, overlaps, threshold, exhaustive_limit):
 
 
 def threshold(p, beamarea, gridarea):
-    # We only care about scaling the threshold based
-    # on the beam area, not the actual ratio. By dividing by 4,
-    # we avoid irregularities for small numbers.
+    def binomcdf(l, n, p):
+        """This binomial CDF function is special as it handles l, n values
+        as floats and interpolates values in between integer values with a small error."""
+        def n_choose_i(n, i):
+            return 1 / ((n + 1) * beta(n - i + 1, i + 1))
+
+        def fn(i, n, p):
+            return n_choose_i(n, i) * p**i * (1 - p)**(n - i)
+
+        return quad(fn, 0, l, args=(n, p))[0]
+
     if gridarea < beamarea:
         print("WARNING: grid area ({}x{}) is less than beam area ({})".format(
             int(math.sqrt(gridarea)), int(math.sqrt(gridarea)),  beamarea),
             file=sys.stderr)
 
-    samples = gridarea // (beamarea / 4)
-    half = samples // 2
-
-    if half < 1:
-        samples = 2
-        half = 1
+    samples = gridarea / beamarea
+    half = samples / 2
 
     for i in np.arange(0, 20, 0.01):
-        if binom.cdf(half, samples, norm.cdf(i)) < p:
+        if binomcdf(half, samples, norm.cdf(i)) < p:
             return i
 
     raise Exception("Probability requires threshold value to be set too high.")
