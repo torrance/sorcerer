@@ -173,7 +173,7 @@ def background(img):
 
 
 def workerspawn(grid, overlaps, threshold, exhaustive_limit):
-    print(" - grid {}; overlaps {}; threshold {}".format(grid, overlaps, threshold))
+    print(" - grid {}; overlaps {}; threshold {:.2f}".format(grid, overlaps, threshold))
     iimg = ThresholdIntegral(snr, threshold)
 
     boxes = []
